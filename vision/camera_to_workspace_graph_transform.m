@@ -1,0 +1,66 @@
+clc;
+clear;
+clc;
+% robot = Robot();
+% model = lab2_live_plot(robot);
+cam = Camera();
+try
+    pose = cam.getCameraPose();
+    disp("T_img_check");
+    disp(pose);
+    R = pose(1:3, 1:3);
+    t = pose(1:3, 4);
+    pos = [750.8705,210.1861]; %x, y pixel position of a selected point on the image
+    disp(pos);
+    % convert pixel position to world coordinates
+    worldPt = pointsToWorld(cam.getCameraInstrinsics, R, t, pos);
+    disp(worldPt);
+    R_0_checker = [ 0  1  0; 
+                    1  0  0; 
+                    0  0 -1
+                  ];
+
+    t_0_checker = [
+                    113;
+                    -70;
+                    0
+                  ];
+    
+    T_0_check = [
+            R_0_checker, t_0_checker;
+            zeros(1,3), 1
+        ];
+    
+    r_pos = inv(T_0_check) * [
+                                worldPt';
+                                0;
+                                1
+                             ];
+
+
+%     r_pos = centers_to_positions(r_pos(1:2)');
+    disp(r_pos);
+
+catch exception
+    getReport(exception)
+    disp('Exited on error, clean shutdown');
+end
+
+
+% figure(1)
+% 
+% hold on 
+% img = cam.getImage();
+% imshow(img)
+% 
+% [x,y,button] = ginput(4);
+% hold off 
+% 
+% disp(x)
+% disp(y)
+
+
+
+% got + showed image 
+% g input to generate x and y 
+% 

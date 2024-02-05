@@ -1,0 +1,226 @@
+classdef objectDetect
+  
+    properties
+        sensitivity;
+        colors;
+        green;
+        yellow;
+        red;
+        orange;
+        grey;
+        camera;
+        colorForRed;
+        colorForYellow;
+        colorForGreen;
+        colorForOrange;
+    end
+    
+    methods
+        function self = objectDetect(cc)
+            self.yellow = [
+                0.134 0.3;
+                0.2 1.000;
+                0.000 1;
+            ];
+
+            self.red = [
+                0.922 0.025;
+                0.2 0.8;
+                0.128 1;
+            ];
+
+            self.orange = [
+                0.055 0.133;
+                0.4 1.000;
+                0.080 1;
+            ];
+
+            self.green = [
+                0.31 0.511;
+                0.239 1;
+                0 1;
+            ];
+
+            self.grey = [
+                0.361 0.562;
+                0.07 0.548;
+                0.212 0.751;
+            ];
+            self.sensitivity = 0.94;
+
+            self.camera = cc;
+        end
+
+
+        function masked = createMask(self,image,h,s,v)
+            %Converting RBE to HSV
+            I = rgb2hsv(image);
+            if h(1) < h(2)
+                Ht = (I(:,:,1) >= h(1)) & (I(:,:,1) <= h(2));
+            else
+                Ht = (I(:,:,1) >= h(1)) | (I(:,:,1) <= h(2));
+            end
+            St = (I(:,:,2) >= s(1) ) & (I(:,:,2) <= s(2));
+            Vt = (I(:,:,3) >= v(1)) & (I(:,:,3) <= v(2));
+            masked = Ht & St & Vt;
+        end
+
+
+        %Masking Applied to each color ball
+        %Green ball mask
+        function masked = findGreen(self,image)
+            masked = self.createMask(image,self.green(1,1:2),self.green(2,1:2),self.green(3,1:2));
+        end
+
+        %Yellow ball mask
+        function masked = findYellow(self,image)
+            masked = self.createMask(image,self.yellow(1,1:2),self.yellow(2,1:2),self.yellow(3,1:2));
+        end
+
+        %Red ball mask
+        function masked = findRed(self,image)
+            masked = self.createMask(image,self.red(1,1:2),self.red(2,1:2),self.red(3,1:2));
+        end
+
+        %Orange ball mask
+        function masked = findOrange(self,image)
+            masked = self.createMask(image,self.orange(1,1:2),self.orange(2,1:2),self.orange(3,1:2));
+        end
+
+        %Grey ball mask
+        function masked = findGrey(self,image)
+            masked = self.createMask(image,self.grey(1,1:2),self.grey(2,1:2),self.grey(3,1:2));
+            %[centers,radii] = imfindcircles(masked,[50 100], "Sensitivity",0.9);
+            %viscircles(centers,radii,'EdgeColor','#5C5F39')
+        end
+
+
+        function [centers,radii] = getBall(self,maskedImage,radiusRange)
+            [CurrentCenters,CurrentRadii] = imfindcircles(maskedImage,radiusRange, "Sensitivity",self.sensitivity);
+            centersAmount = size(CurrentRadii);
+%             viscircles(CurrentCenters,CurrentRadii,'EdgeColor',displayColor);
+%             viscircles(CurrentCenters,CurrentRadii./CurrentRadii,'EdgeColor',displayColor);
+            centers = CurrentCenters;
+            radii = CurrentRadii;
+        end
+
+
+        function displayTarget(self,location, size,backgroundImage,color)
+            imshow(backgroundImage);
+                scatter(location(:,1),location(:,2),size,color);
+                scatter(location(:,1),location(:,2),1000,color,'Marker','+');
+        end
+
+        function masked = applyMask(self, image, points)
+            bw = ~poly2mask(points(:,1),points(:,2),height(image),width(image));
+            bw = repmat(bw,[1 1 3]);
+            image(bw) = 0;
+            masked = image;
+        end
+
+        %transform from checkboard to robot baseframe (note: the checker board's positive Z point down, so if want go up, the Z should be negative)
+        function r_pos = switchToRobot(self,cp,PeeDegree)
+            R_0_checker = [ 
+                            0  1  0; 
+                            1  0  0; 
+                            0  0 -1
+                          ];
+
+            t_0_checker = [
+                            113;
+                            -70;
+                            0
+                          ];
+        
+            T_0_check = [
+                    R_0_checker, t_0_checker;
+                    zeros(1,3), 1
+                    ];
+    
+            r_pos = inv(T_0_check) * [
+                                        cp';
+                                        1
+                                     ];
+            r_pos = r_pos';
+            r_pos(4) = PeeDegree;
+        end
+
+        %this one can do mutiable XY at once
+        function realXY = ballXYonBoard(self,imagePoints)
+            Pcam = self.camera.getCameraPose;
+            Pcam = inv(Pcam);
+            Pcam = Pcam(1:3,4)';
+            Yoff = 18; %mm
+            Xoff = 8;%mm
+            Zball = -10; %mm, can be adjust
+
+            Zcam = Pcam(3); %camera height
+            %transfer balls all to checkboard frame
+            for i = 1:height(imagePoints)
+                imagePoints(i,:) = pointsToWorld(self.camera.getCameraInstrinsics,self.camera.getRotationMatrix,self.camera.getTranslationVector,imagePoints(i,:));
+            end
+            Xball = imagePoints(:,1);
+            Yball = imagePoints(:,2);
+
+            %start calcualtion
+            ratioZ = Zball / Zcam;
+            Xreal = Xball .*(1-ratioZ) + Xoff;
+            Yreal = Yball .* (1-ratioZ) + Yoff;
+
+            %generate output
+            realXY = [Xreal Yreal];
+        end
+
+        function [Probot, groupIndex] = getNextBallPosition(self,fieldEdges,restXY,liftHeight,radiusRange)
+            restXY = restXY(1:2);
+            image = self.applyMask(self.camera.getImage,fieldEdges);
+            image = imsharpen(image);
+            om = self.findOrange(image);
+            ym = self.findYellow(image);
+            gm = self.findGreen(image);
+            rm = self.findRed(image);
+            grm = self.findGrey(image);
+            maskH = height(om);
+            maskL = width(om);
+            masks = zeros(maskH*5,maskL);
+            masks(1:maskH,1:maskL) = ym;
+            masks(maskH+1:maskH*2,1:maskL) = om;
+            masks(maskH*2+1:maskH*3,1:maskL) = gm;
+            masks(maskH*3+1:maskH*4,1:maskL) = rm;
+            masks(maskH*4+1:maskH*5,1:maskL) = grm;
+            for i = 1:5
+                mask = masks(((i - 1) * maskH + 1):maskH*i,1:maskL);
+                imshow(mask);
+                [Pball, Rball] = self.getBall(mask,radiusRange);
+                if(height(Pball) > 0)
+                        cbxy = self.ballXYonBoard(Pball); %checkerboard frame 
+                        rbxyz = zeros(height(cbxy),4);
+                        for j = 1:height(cbxy)
+                            rbxyzd(j,:) = self.switchToRobot([cbxy(j,:) -liftHeight],90);
+                        end
+                        rbxy = rbxyzd(:,1:2);
+                        dxy = rbxy - restXY;
+                        dsq = dxy(:,1).^2 + dxy(:,2).^2;
+                        [minD, minI] = min(dsq);
+                        nextBall = rbxyzd(minI,:);
+                        nextRadius = Pball(minI,:);
+                        imshow(mask);
+                        hold on;     
+                            scatter(Pball(:,1),Pball(:,2),1250,'red','Marker','+');
+                            scatter(Pball(:,1),Pball(:,2),Rball*50,'red');
+                            scatter(Pball(minI,1),Pball(minI,2),1250,'green','Marker','+');
+                            scatter(Pball(minI,1),Pball(minI,2),Rball*50,'green');
+                        hold off;
+                        Probot = nextBall;
+                        groupIndex = i;
+                    break;
+                else
+                    Probot = [-1 -1 -1];
+                    groupIndex = 0;
+                end
+            end
+        end
+
+    end
+end
+
