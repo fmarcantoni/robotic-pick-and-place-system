@@ -1,12 +1,12 @@
-# ball_sorting_arm_system
-
+# Robotic Pick and Place System
 Watch the system in action:
 
-https://github.com/Shivangi-Sirsiwal/ball_sorting_arm_system/assets/152037538/c7c0a0ed-64dc-457d-9f98-ffa4080a62b7
+https://www.youtube.com/watch?v=2cv498b8PI4
 
-To learn more about the mechanics of the project, please reference the project report found in the repository.
+To learn more about the mechanics, physics and kinematics of the project, please refer to the project report found in the repository.
 
 
 ### Further Notes
 
-*This project was created for the Final Project in the WPI course RBE3001 Unified Robotics III as taught by Professor Mahdi Agheli in A Term of the 2023 school year. The code has been developed in MATLAB to run with the Open Manipulator X arm. This code was created by Shivangi Sirsiwal, Vincent Pu, as well as Matheos Simantriakis as a part of project group 22.*
+* Prior to this final project, in the previous labs in the class RBE3001: Manipulation, we implemented, using MATLAB code, forward kinematics to calculate the robot’s position in the task space given the joint variables, we implemented inverse kinematics and performed trajectory generation techniques in joint space and in task space to generate a smooth trajectory from one vertex to another and, as well, we implemented differential kinematics (a.k.a. velocity kinematics) for control of the robot.
+In the final project, we will combine what we have learned to make a robotic pick and place sorting system. We will incorporate computer vision to identify targets, localize them with respect to the robot, move the robot towards the object, grab them, and sort them. Finally, it took us some experimentation to identify the best approach to achieve the final system which is explained in the report document.*
